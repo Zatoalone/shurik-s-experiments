@@ -348,10 +348,10 @@ def get_critical(update: Update, context):
     """
     user = update.effective_user
     if check_user(user.id):
-        data = remote_exec(HOST, PORT, USERNAME, PASSWORD, 'tail -n 5 /var/log/crit.log')
+        data = remote_exec(HOST, PORT, USERNAME, PASSWORD, 'tail -n 6 /var/log/crit.log')
         out = ""
         i = 0
-        for line in data.split("\n"):
+        for line in data.split("\n")[:-1]:
             i += 1
             tmp_line = re.sub(" +", " ", line)
             out += f"{i}. {tmp_line} \n"
@@ -420,6 +420,24 @@ def get_services(update: Update, context):
         update.message.bot.send_document(chat_id, doc_file)
 
 
+def get_repl_logs(update: Update, context):
+    """
+    Команда вывода логов о репликации из /var/log/postgresql/
+    """
+    user = update.effective_user
+    if check_user(user.id):
+        data = remote_exec(HOST, PORT, USERNAME, PASSWORD, 'cat /var/log/postgresql/postgresql-15-main.log | grep repl_user | tail -n 3')
+        print(data)
+        out = ""
+        i = 0
+        for line in data.split("\n"):
+            i += 1
+            tmp_line = re.sub(" +", " ", line)
+            out += f"{i}. {tmp_line} \n"
+        update.message.reply_text("Последние критические события")
+        update.message.reply_text(text=out)
+
+
 def main():
     updater = Updater(TOKEN, use_context=True)
     # Получаем диспетчер для регистрации обработчиков
@@ -463,6 +481,7 @@ def main():
     dp.add_handler(CommandHandler("get_ps", get_ps))
     dp.add_handler(CommandHandler("get_ss", get_ss))
     dp.add_handler(CommandHandler("get_services", get_services))
+    dp.add_handler(CommandHandler("get_repl_logs", get_repl_logs))
     # Диалоговые
     dp.add_handler(conv_handler_find_phone_numbers)
     dp.add_handler(conv_handler_find_emails)
