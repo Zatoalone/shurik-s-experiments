@@ -434,7 +434,7 @@ def get_repl_logs(update: Update, context):
             i += 1
             tmp_line = re.sub(" +", " ", line)
             out += f"{i}. {tmp_line} \n"
-        update.message.reply_text("Последние критические события")
+        update.message.reply_text("Последние логи о репликации")
         update.message.reply_text(text=out)
 
 
