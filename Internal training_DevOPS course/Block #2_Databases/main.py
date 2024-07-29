@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 import logging
 import re
 import paramiko
+import psycopg2
+from psycopg2 import Error
 from telegram import Update, ForceReply
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler
 
@@ -15,6 +17,11 @@ PASSWORD = os.getenv('PASSWORD')
 ALLOWED_IDS = []
 for aid in os.getenv('ALLOWED_ID').split(' '):
     ALLOWED_IDS.append(int(aid))
+PG_HOST = os.getenv('PG_HOST')
+PG_PORT = os.getenv('PG_PORT')
+PG_USER = os.getenv('PG_USER')
+PG_PASSWORD = os.getenv('PG_PASSWORD')
+PG_DB = os.getenv('PG_DB')
 
 # Подключаем логирование
 logging.basicConfig(
@@ -59,6 +66,23 @@ def remote_exec(host: str, port: str, username: str, password: str, command: str
     return data
 
 
+def pg_exec(pg_user: str, pg_password: str, pg_host: str, pg_port: str, pg_db: str, command: str) -> list:
+    connection = None
+    try:
+        connection = psycopg2.connect(user=pg_user, password=pg_password, host=pg_host, port=pg_port, database=pg_db)
+        cursor = connection.cursor()
+        cursor.execute(command)
+        data = cursor.fetchall()
+        logging.info("Команда успешно выполнена")
+        return data
+    except (Exception, Error) as error:
+        logging.error("Ошибка при работе с PostgreSQL: %s", error)
+    finally:
+        if connection is not None:
+            cursor.close()
+            connection.close()
+
+
 def start(update: Update, context):
     """
     Команда приветствия
@@ -94,7 +118,9 @@ def help_command(update: Update, context):
                 "13. Показать запущенные процессы: /get_ps\n"
                 "14. Показать используемые порты: /get_ss\n"
                 "15. Показать установленные пакеты: /get_apt_list\n"
-                "16. Показать запущенные сервисы: /get_services")
+                "16. Показать запущенные сервисы: /get_services\n"
+                "17. Показать статус репликации PG: /get_repl_logs\n"
+                "18. Показать содержимое таблицы emails: /get_emails")
         update.message.reply_text(help)
 
 
@@ -367,7 +393,11 @@ def get_ps(update: Update, context):
     if check_user(user.id):
         data = remote_exec(HOST, PORT, USERNAME, PASSWORD, 'ps')
         update.message.reply_text("Запущенные процессы")
-        update.message.reply_text(text=data)
+        if len(data) > 4096:
+            for x in range(0, len(data), 4096):
+                update.message.reply_text(text=data[x:x + 4096])
+        else:
+            update.message.reply_text(text=data)
 
 
 def get_ss(update: Update, context):
@@ -438,6 +468,27 @@ def get_repl_logs(update: Update, context):
         update.message.reply_text(text=out)
 
 
+def get_emails(update: Update, context):
+    """
+    Команда вывода информации из таблицы emails
+    """
+    user = update.effective_user
+    if check_user(user.id):
+        data = pg_exec(PG_USER, PG_PASSWORD, PG_HOST, PG_PORT, PG_DB, "SELECT * FROM emails;")
+        out = ""
+        i = 0
+        for line in data:
+            i += 1
+            out += f"{i}. ID: {line[0]}, Email: {line[1]}\n"
+        print(len(out))
+        update.message.reply_text("Содержимое таблицы emails")
+        if len(out) > 4096:
+            for x in range(0, len(out), 4096):
+                update.message.reply_text(text=out[x:x + 4096])
+        else:
+            update.message.reply_text(text=out)
+
+
 def main():
     updater = Updater(TOKEN, use_context=True)
     # Получаем диспетчер для регистрации обработчиков
@@ -482,6 +533,7 @@ def main():
     dp.add_handler(CommandHandler("get_ss", get_ss))
     dp.add_handler(CommandHandler("get_services", get_services))
     dp.add_handler(CommandHandler("get_repl_logs", get_repl_logs))
+    dp.add_handler(CommandHandler("get_emails", get_emails))
     # Диалоговые
     dp.add_handler(conv_handler_find_phone_numbers)
     dp.add_handler(conv_handler_find_emails)
