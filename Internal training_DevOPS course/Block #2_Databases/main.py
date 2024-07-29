@@ -120,7 +120,8 @@ def help_command(update: Update, context):
                 "15. Показать установленные пакеты: /get_apt_list\n"
                 "16. Показать запущенные сервисы: /get_services\n"
                 "17. Показать статус репликации PG: /get_repl_logs\n"
-                "18. Показать содержимое таблицы emails: /get_emails")
+                "18. Показать содержимое таблицы emails: /get_emails\n"
+                "19. Показать содержимое таблицы phone_numbers: /get_phone_numbers")
         update.message.reply_text(help)
 
 
@@ -479,9 +480,29 @@ def get_emails(update: Update, context):
         i = 0
         for line in data:
             i += 1
-            out += f"{i}. ID: {line[0]}, Email: {line[1]}\n"
+            out += f"{i}. ID: {line[0]}, Почта: {line[1]}\n"
         print(len(out))
         update.message.reply_text("Содержимое таблицы emails")
+        if len(out) > 4096:
+            for x in range(0, len(out), 4096):
+                update.message.reply_text(text=out[x:x + 4096])
+        else:
+            update.message.reply_text(text=out)
+
+
+def get_phone_numbers(update: Update, context):
+    """
+    Команда вывода информации из таблицы phone_numbers
+    """
+    user = update.effective_user
+    if check_user(user.id):
+        data = pg_exec(PG_USER, PG_PASSWORD, PG_HOST, PG_PORT, PG_DB, "SELECT * FROM phone_numbers;")
+        out = ""
+        i = 0
+        for line in data:
+            i += 1
+            out += f"{i}. ID: {line[0]}, Телефон: {line[1]}\n"
+        update.message.reply_text("Содержимое таблицы phone_numbers")
         if len(out) > 4096:
             for x in range(0, len(out), 4096):
                 update.message.reply_text(text=out[x:x + 4096])
@@ -534,6 +555,7 @@ def main():
     dp.add_handler(CommandHandler("get_services", get_services))
     dp.add_handler(CommandHandler("get_repl_logs", get_repl_logs))
     dp.add_handler(CommandHandler("get_emails", get_emails))
+    dp.add_handler(CommandHandler("get_phone_numbers", get_phone_numbers))
     # Диалоговые
     dp.add_handler(conv_handler_find_phone_numbers)
     dp.add_handler(conv_handler_find_emails)
