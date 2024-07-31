@@ -251,7 +251,6 @@ def find_phone_numbers(update: Update, context):
                 phone_numbers += f'{i + 1}. {phone_number_list[i]}\n'
         update.message.reply_text(phone_numbers)
         update.message.reply_text("Сохранить в базу данных? (да/нет)")
-        # return ConversationHandler.END
         return 'save_phone_number'
 
 
