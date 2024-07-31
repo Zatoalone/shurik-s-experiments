@@ -1,4 +1,5 @@
 ﻿import os
+import shutil
 from dotenv import load_dotenv
 import logging
 import re
@@ -72,9 +73,13 @@ def pg_exec(pg_user: str, pg_password: str, pg_host: str, pg_port: str, pg_db: s
         connection = psycopg2.connect(user=pg_user, password=pg_password, host=pg_host, port=pg_port, database=pg_db)
         cursor = connection.cursor()
         cursor.execute(command)
-        data = cursor.fetchall()
-        logging.info("Команда успешно выполнена")
-        return data
+        if "INSERT" in command:
+            connection.commit()
+            logging.debug(f"Команда \"{command}\" успешно выполнена")
+        else:
+            data = cursor.fetchall()
+            logging.info(f"Команда \"{command}\" успешно выполнена")
+            return data
     except (Exception, Error) as error:
         logging.error("Ошибка при работе с PostgreSQL: %s", error)
     finally:
@@ -102,27 +107,27 @@ def help_command(update: Update, context):
     """
     user = update.effective_user
     if check_user(user.id):
-        help = ("Что умеет бот:\n"
-                "1. Искать mail в тексте: /find_email\n"
-                "2. Искать телефонные номера в тексте: /find_phone_number\n"
-                "3. Проверять пароль на сложность: /verify_password\n"
-                "4. Показать информацию о релизе ОС: /get_release\n"
-                "5. Показать информацию о архитектуре: /get_uname\n"
-                "6. Показать время работы ОС: /get_uptime\n"
-                "7. Показать состояние Файловой системы: /get_df\n"
-                "8. Показать состояние оперативной памяти: /get_free\n"
-                "9. Показать производительность системы: /get_mpstat\n"
-                "10. Показать работающих в системе пользователей: /get_w\n"
-                "11. Показать последние 10 входов в систему: /get_auths\n"
-                "12. Показать последние 5 критических события: /get_critical\n"
-                "13. Показать запущенные процессы: /get_ps\n"
-                "14. Показать используемые порты: /get_ss\n"
-                "15. Показать установленные пакеты: /get_apt_list\n"
-                "16. Показать запущенные сервисы: /get_services\n"
-                "17. Показать статус репликации PG: /get_repl_logs\n"
-                "18. Показать содержимое таблицы emails: /get_emails\n"
-                "19. Показать содержимое таблицы phone_numbers: /get_phone_numbers")
-        update.message.reply_text(help)
+        out_text = ("Что умеет бот:\n"
+                    "1. Поиск email'ов в тексте (с возможностью сохранить в базу данных ): /find_email\n"
+                    "2. Искать телефонные номера в тексте: /find_phone_number\n"
+                    "3. Проверять пароль на сложность: /verify_password\n"
+                    "4. Показать информацию о релизе ОС: /get_release\n"
+                    "5. Показать информацию о архитектуре: /get_uname\n"
+                    "6. Показать время работы ОС: /get_uptime\n"
+                    "7. Показать состояние Файловой системы: /get_df\n"
+                    "8. Показать состояние оперативной памяти: /get_free\n"
+                    "9. Показать производительность системы: /get_mpstat\n"
+                    "10. Показать работающих в системе пользователей: /get_w\n"
+                    "11. Показать последние 10 входов в систему: /get_auths\n"
+                    "12. Показать последние 5 критических события: /get_critical\n"
+                    "13. Показать запущенные процессы: /get_ps\n"
+                    "14. Показать используемые порты: /get_ss\n"
+                    "15. Показать установленные пакеты: /get_apt_list\n"
+                    "16. Показать запущенные сервисы: /get_services\n"
+                    "17. Показать статус репликации PG: /get_repl_logs\n"
+                    "18. Показать содержимое таблицы emails: /get_emails\n"
+                    "19. Показать содержимое таблицы phone_numbers: /get_phone_numbers")
+        update.message.reply_text(out_text)
 
 
 def find_email_command(update: Update, context):
@@ -187,10 +192,41 @@ def find_email(update: Update, context):
             update.message.reply_text('Email не найдены')
             return ConversationHandler.END
         emails = ''
-        for i in range(len(email_number_list)):
-            emails += f'{i + 1}. {email_number_list[i]}\n'
+        if not os.path.exists('temp'):
+            os.mkdir('temp')
+        with open(f"temp/emails_{user.id}.tmp", "w") as file:
+            for i in range(len(email_number_list)):
+                file.write(f'(\'{email_number_list[i]}\')\n')
+                emails += f'{i + 1}. {email_number_list[i]}\n'
         update.message.reply_text(emails)
-        return ConversationHandler.END
+        update.message.reply_text("Сохранить в базу данных? (да/нет)")
+        # return ConversationHandler.END
+        return 'save_email'
+
+
+def save_email(update: Update, context):
+    """
+    Обработчик сохранения email'ов в базу данных
+    """
+    user = update.effective_user
+    if check_user(user.id):
+        user_input = update.message.text
+        if user_input.lower() == 'да':
+            emails = ""
+            with open(f"temp/emails_{user.id}.tmp") as file:
+                for line in file:
+                    emails += f"{line},"
+            insert_mails = emails.replace("\n", "")[:-1]
+            print(insert_mails)
+            pg_exec(PG_USER, PG_PASSWORD, PG_HOST, PG_PORT, PG_DB, f"INSERT INTO emails(email) VALUES{insert_mails};")
+            update.message.reply_text("Email\'ы сохранены")
+        elif user_input.lower() == 'нет':
+            update.message.reply_text("Email\'ы не сохранены")
+        else:
+            update.message.reply_text("Не удалось распознать ответ. Email\'ы не сохранены")
+        if os.path.exists('temp'):
+            shutil.rmtree('temp')
+    return ConversationHandler.END
 
 
 def find_phone_numbers(update: Update, context):
@@ -517,7 +553,8 @@ def main():
     # Обработчики диалогов
     conv_handler_find_phone_numbers = ConversationHandler(
         entry_points=[CommandHandler('find_phone_number', find_phone_numbers_command)],
-        states={'find_phone_number': [MessageHandler(Filters.text & ~Filters.command, find_phone_numbers)], },
+        states={'find_phone_number': [MessageHandler(Filters.text & ~Filters.command, find_phone_numbers)],
+                'save_email': [MessageHandler(Filters.text & ~Filters.command, save_email)]},
         fallbacks=[]
     )
     conv_handler_find_emails = ConversationHandler(
