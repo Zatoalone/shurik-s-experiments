@@ -67,7 +67,7 @@ def remote_exec(host: str, port: str, username: str, password: str, command: str
     return data
 
 
-def pg_exec(pg_user: str, pg_password: str, pg_host: str, pg_port: str, pg_db: str, command: str) -> list:
+def pg_exec(pg_user: str, pg_password: str, pg_host: str, pg_port: str, pg_db: str, command: str) -> any:
     connection = None
     try:
         connection = psycopg2.connect(user=pg_user, password=pg_password, host=pg_host, port=pg_port, database=pg_db)
@@ -76,12 +76,14 @@ def pg_exec(pg_user: str, pg_password: str, pg_host: str, pg_port: str, pg_db: s
         if "INSERT" in command:
             connection.commit()
             logging.debug(f"Команда \"{command}\" успешно выполнена")
+            return 'Данные добавлены в базу данных'
         else:
             data = cursor.fetchall()
             logging.info(f"Команда \"{command}\" успешно выполнена")
             return data
     except (Exception, Error) as error:
         logging.error("Ошибка при работе с PostgreSQL: %s", error)
+        return 'Внутренняя ошибка. Не удалось добавить данные'
     finally:
         if connection is not None:
             cursor.close()
@@ -108,8 +110,9 @@ def help_command(update: Update, context):
     user = update.effective_user
     if check_user(user.id):
         out_text = ("Что умеет бот:\n"
-                    "1. Поиск email'ов в тексте (с возможностью сохранить в базу данных ): /find_email\n"
-                    "2. Искать телефонные номера в тексте: /find_phone_number\n"
+                    "1. Поиск email'ов в тексте (с возможностью сохранить в базу данных): /find_email\n"
+                    "2. Поиск телефонных номеров в тексте (с возможностью сохранить в базу данных): "
+                    "/find_phone_number\n"
                     "3. Проверять пароль на сложность: /verify_password\n"
                     "4. Показать информацию о релизе ОС: /get_release\n"
                     "5. Показать информацию о архитектуре: /get_uname\n"
@@ -200,7 +203,6 @@ def find_email(update: Update, context):
                 emails += f'{i + 1}. {email_number_list[i]}\n'
         update.message.reply_text(emails)
         update.message.reply_text("Сохранить в базу данных? (да/нет)")
-        # return ConversationHandler.END
         return 'save_email'
 
 
@@ -217,9 +219,8 @@ def save_email(update: Update, context):
                 for line in file:
                     emails += f"{line},"
             insert_mails = emails.replace("\n", "")[:-1]
-            print(insert_mails)
-            pg_exec(PG_USER, PG_PASSWORD, PG_HOST, PG_PORT, PG_DB, f"INSERT INTO emails(email) VALUES{insert_mails};")
-            update.message.reply_text("Email\'ы сохранены")
+            data = pg_exec(PG_USER, PG_PASSWORD, PG_HOST, PG_PORT, PG_DB, f"INSERT INTO emails(email) VALUES{insert_mails};")
+            update.message.reply_text(data)
         elif user_input.lower() == 'нет':
             update.message.reply_text("Email\'ы не сохранены")
         else:
@@ -242,10 +243,40 @@ def find_phone_numbers(update: Update, context):
             update.message.reply_text('Телефонные номера не найдены')
             return ConversationHandler.END
         phone_numbers = ''
-        for i in range(len(phone_number_list)):
-            phone_numbers += f'{i + 1}. {phone_number_list[i]}\n'
+        if not os.path.exists('temp'):
+            os.mkdir('temp')
+        with open(f"temp/phone_number_{user.id}.tmp", "w") as file:
+            for i in range(len(phone_number_list)):
+                file.write(f'(\'{phone_number_list[i]}\')\n')
+                phone_numbers += f'{i + 1}. {phone_number_list[i]}\n'
         update.message.reply_text(phone_numbers)
-        return ConversationHandler.END
+        update.message.reply_text("Сохранить в базу данных? (да/нет)")
+        # return ConversationHandler.END
+        return 'save_phone_number'
+
+
+def save_phone_number(update: Update, context):
+    """
+    Обработчик сохранения телефонных номеров в базу данных
+    """
+    user = update.effective_user
+    if check_user(user.id):
+        user_input = update.message.text
+        if user_input.lower() == 'да':
+            phone_numbers = ""
+            with open(f"temp/phone_number_{user.id}.tmp") as file:
+                for line in file:
+                    phone_numbers += f"{line},"
+            insert_phone_numbers = phone_numbers.replace("\n", "")[:-1]
+            data = pg_exec(PG_USER, PG_PASSWORD, PG_HOST, PG_PORT, PG_DB, f"INSERT INTO phone_numbers(number) VALUES{insert_phone_numbers};")
+            update.message.reply_text(data)
+        elif user_input.lower() == 'нет':
+            update.message.reply_text("Телефонные номера не сохранены")
+        else:
+            update.message.reply_text("Не удалось распознать ответ. Телефонные номера не сохранены")
+        if os.path.exists('temp'):
+            shutil.rmtree('temp')
+    return ConversationHandler.END
 
 
 def verify_password(update: Update, context):
@@ -554,12 +585,13 @@ def main():
     conv_handler_find_phone_numbers = ConversationHandler(
         entry_points=[CommandHandler('find_phone_number', find_phone_numbers_command)],
         states={'find_phone_number': [MessageHandler(Filters.text & ~Filters.command, find_phone_numbers)],
-                'save_email': [MessageHandler(Filters.text & ~Filters.command, save_email)]},
+                'save_phone_number': [MessageHandler(Filters.text & ~Filters.command, save_phone_number)]},
         fallbacks=[]
     )
     conv_handler_find_emails = ConversationHandler(
         entry_points=[CommandHandler('find_email', find_email_command)],
-        states={'find_email': [MessageHandler(Filters.text & ~Filters.command, find_email)], },
+        states={'find_email': [MessageHandler(Filters.text & ~Filters.command, find_email)],
+                'save_email': [MessageHandler(Filters.text & ~Filters.command, save_email)]},
         fallbacks=[]
     )
     conv_handler_verify_password = ConversationHandler(
