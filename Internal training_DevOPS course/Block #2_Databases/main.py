@@ -524,7 +524,6 @@ def get_repl_logs(update: Update, context):
     user = update.effective_user
     if check_user(user.id):
         data = remote_exec(HOST, PORT, USERNAME, PASSWORD, 'cat /var/log/postgresql/postgresql-15-main.log | grep repl_user | tail -n 3')
-        print(data)
         out = ""
         i = 0
         for line in data.split("\n"):
@@ -547,7 +546,6 @@ def get_emails(update: Update, context):
         for line in data:
             i += 1
             out += f"{i}. ID: {line[0]}, Почта: {line[1]}\n"
-        print(len(out))
         update.message.reply_text("Содержимое таблицы emails")
         if len(out) > 4096:
             for x in range(0, len(out), 4096):
