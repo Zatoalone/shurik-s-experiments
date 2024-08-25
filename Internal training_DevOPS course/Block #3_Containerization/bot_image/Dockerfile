@@ -1,4 +1,5 @@
 FROM python:3.11-bookworm
+LABEL authors="aeremin"
 WORKDIR /webapp
 COPY . .
 RUN pip install -r requirements.txt
