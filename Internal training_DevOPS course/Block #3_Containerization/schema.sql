@@ -1,7 +1,10 @@
---Version 5
+--Version 6
 DROP TABLE IF EXISTS emails;
 DROP TABLE IF EXISTS phones;
 
+CREATE USER mr_bot WITH PASSWORD '';
+CREATE USER repl_user REPLICATION PASSWORD '';
+SELECT pg_create_physical_replication_slot('replication_slot');
 CREATE TABLE emails (ID SERIAL PRIMARY KEY, email VARCHAR (100) NOT NULL);
 CREATE TABLE phone_numbers (ID SERIAL PRIMARY KEY, number VARCHAR (100) NOT NULL);
 

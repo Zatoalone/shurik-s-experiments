@@ -523,7 +523,7 @@ def get_repl_logs(update: Update, context):
     """
     user = update.effective_user
     if check_user(user.id):
-        data = remote_exec(HOST, PORT, USERNAME, PASSWORD, 'cat /var/log/postgresql/postgresql-15-main.log | grep repl_user | tail -n 3')
+        data = remote_exec(HOST, PORT, USERNAME, PASSWORD, 'sudo docker logs root-pg-master-1 |& grep replication_slot | tail -n 4')
         out = ""
         i = 0
         for line in data.split("\n"):
