@@ -1,0 +1,138 @@
+---
+- hosts: devops-app
+  tasks:
+    - name: Клонирование репозитория и checkout в ветку ansible
+      git:
+        repo: https://github.com/Zatoalone/shurik-s-experiments.git
+        dest: /home/ansible/bot
+        version: ansible
+        update: yes
+
+    - name: Установка зависимостей из requirements.txt
+      pip:
+        requirements: "/home/ansible/bot/Internal training_DevOPS course/Block #2_Databases/requirements.txt"
+        virtualenv: /home/ansible/venvs
+        virtualenv_python: python3.11
+        state: present
+
+    - name: Копирование .env файла с контроллера на удалённый хост
+      copy:
+        src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/template_env"
+        dest: "/home/ansible/bot/Internal training_DevOPS course/Block #2_Databases/.env"
+
+    - name: Запуск main.py
+      command: nohup /home/ansible/venvs/bin/python3 main.py &
+      args:
+        chdir: "/home/ansible/bot/Internal training_DevOPS course/Block #2_Databases/"
+      async: 2592000
+      poll: 0
+
+- hosts: devops-db
+  become: True
+  tasks:
+    - name: Обновление пакетов
+      apt:
+        update_cache: yes
+        name: "*"
+        state: latest
+
+    - name: Установка необходимых пакетов
+      apt:
+        pkg:
+        - postgresql
+        - postgresql-contrib
+        - python3-pip
+        - python3-dev
+        - python3-venv
+        - python3-psycopg2
+        state: present
+
+    - name: Копирование postgresql.conf
+      copy:
+        src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/db_configs/master/postgresql.conf"
+        dest: /etc/postgresql/15/main/postgresql.conf
+        owner: postgres
+        group: postgres
+        mode: '0644'
+
+    - name: Копирование pg_hba.conf
+      copy:
+        src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/db_configs/master/pg_hba.conf"
+        dest: /etc/postgresql/15/main/pg_hba.conf
+        owner: postgres
+        group: postgres
+        mode: '0644'
+
+    - name: Копирование схемы
+      copy:
+        src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/schema.sql"
+        dest: /tmp/schema.sql
+
+    - name: Перезапуск службы postgresql
+      service:
+       name: postgresql
+       state: restarted
+
+    - name: Удаление базы shurik_bot
+      command: sudo -u postgres psql -c "DROP DATABASE IF EXISTS shurik_bot;"
+
+    - name: Создание базы shurik_bot
+      command: sudo -u postgres psql -c "CREATE DATABASE shurik_bot OWNER postgres;"
+
+    - name: Обновление схемы
+      command: sudo -u postgres psql -d shurik_bot -f "/tmp/schema.sql"
+
+    - name: Обновление прав на файл лога PG
+      file:
+        path: /var/log/postgresql/postgresql-15-main.log
+        mode: '0644'
+
+- hosts: devops-db-repl
+  become: True
+  tasks:
+    - name: Обновление всех пакетов
+      apt:
+        update_cache: yes
+        name: "*"
+        state: latest
+
+    - name: Установка PG
+      apt:
+        pkg:
+          - postgresql
+          - postgresql-contrib
+          - python3-pip
+          - python3-dev
+          - python3-venv
+          - python3-psycopg2
+        state: present
+    - name: Копирование postgresql.conf для реплики
+      copy:
+        src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/db_configs/replica/postgresql.conf"
+        dest: /etc/postgresql/15/main/postgresql.conf
+        owner: postgres
+        group: postgres
+        mode: '0644'
+
+    - name: Остановка службы postgresql
+      service:
+        name: postgresql
+        state: stopped
+
+    - name: Удаление данных в директории main
+      file:
+        path: /var/lib/postgresql/15/main/
+        state: absent
+
+    - name: Запуск службы postgresql после очистки
+      service:
+        name: postgresql
+        state: started
+
+    - name: Выполнение pg_basebackup
+      command: pg_basebackup -R -h 192.168.1.42 -U repl_user -D /var/lib/postgresql/15/main -P
+      environment:
+       PGPASSWORD: "123456"
+      register: pg_basebackup_result
+      failed_when: pg_basebackup_result.rc != 0
+      changed_when: False

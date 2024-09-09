@@ -1,0 +1,4 @@
+
+devops-app ansible_host=192.168.1.41 ansible_user=ansible ansible_password=123456
+devops-db ansible_host=192.168.1.42 ansible_user=ansible ansible_password=123456
+devops-db-repl ansible_host=192.168.1.43 ansible_user=ansible ansible_password=123456
