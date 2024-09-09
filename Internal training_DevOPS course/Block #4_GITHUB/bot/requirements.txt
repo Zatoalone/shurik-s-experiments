@@ -1,0 +1,7 @@
+paramiko==3.4.0
+python-dotenv==1.0.1
+python-telegram-bot==13.7
+requests==2.32.3
+psycopg2-binary==2.9.9
+urllib3==2.2.2
+
