@@ -15,7 +15,7 @@
         virtualenv_python: python3.11
         state: present
 
-    - name: Копирование .env файла с контроллера на удалённый хост
+    - name: Копирование .env
       copy:
         src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/template_env"
         dest: "/home/ansible/bot/Internal training_DevOPS course/Block #2_Databases/.env"
@@ -30,13 +30,13 @@
 - hosts: devops-db
   become: True
   tasks:
-    - name: Обновление пакетов
+    - name: Обновление всех пакетов
       apt:
         update_cache: yes
         name: "*"
         state: latest
 
-    - name: Установка необходимых пакетов
+    - name: Установка PG
       apt:
         pkg:
         - postgresql
@@ -106,7 +106,7 @@
           - python3-venv
           - python3-psycopg2
         state: present
-    - name: Копирование postgresql.conf для реплики
+    - name: Копирование postgresql.conf
       copy:
         src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/db_configs/replica/postgresql.conf"
         dest: /etc/postgresql/15/main/postgresql.conf
@@ -124,7 +124,7 @@
         path: /var/lib/postgresql/15/main/
         state: absent
 
-    - name: Запуск службы postgresql после очистки
+    - name: Запуск службы postgresql
       service:
         name: postgresql
         state: started
