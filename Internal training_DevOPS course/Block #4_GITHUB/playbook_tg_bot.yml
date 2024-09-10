@@ -17,7 +17,7 @@
 
     - name: Копирование .env
       copy:
-        src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #4_GITHUB/template_env"
+        src: "/work/projects/python/shurik-s-experiments/Internal training_DevOPS course/Block #2_Databases/.env"
         dest: "/home/ansible/bot/Internal training_DevOPS course/Block #2_Databases/.env"
 
     - name: Запуск main.py
@@ -124,11 +124,6 @@
         path: /var/lib/postgresql/15/main/
         state: absent
 
-    - name: Запуск службы postgresql
-      service:
-        name: postgresql
-        state: started
-
     - name: Выполнение pg_basebackup
       command: pg_basebackup -R -h 192.168.1.42 -U repl_user -D /var/lib/postgresql/15/main -P
       environment:
@@ -136,3 +131,16 @@
       register: pg_basebackup_result
       failed_when: pg_basebackup_result.rc != 0
       changed_when: False
+
+    - name: Обновление прав на директорию var/lib/postgresql/15/main/
+      file:
+        dest: /var/lib/postgresql/15/main
+        owner: postgres
+        group: postgres
+        mode: '0700'
+        recurse: yes
+
+    - name: Запуск службы postgresql
+      service:
+        name: postgresql
+        state: started
